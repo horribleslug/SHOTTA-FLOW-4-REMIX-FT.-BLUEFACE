@@ -1,0 +1,20 @@
+<launch>
+
+	<node respawn="true" pkg="joy"
+        type="joy_node" name="joy" >
+		<param name="dev" type="string" value="/dev/input/js0" />
+		<param name="deadzone" value="0.12" />
+    </node>
+    
+    <node pkg="teleop_twist_joy" type="teleop_node" name="teleop_joy">
+		<rosparam command="load" file="$(find enph353_utils)/config/teleop_twist_joy.yaml" />
+		<remap from="cmd_vel" to="joy_vel"/>
+	</node>
+
+	<node pkg="teleop_twist_keyboard" type="teleop_twist_keyboard.py" name="teleop_twist_keybaord" output="screen" launch-prefix="xterm -e"/>
+
+	<node pkg="twist_mux" type="twist_mux" name="twist_mux_node">
+		<rosparam command="load" file="$(find enph353_utils)/config/twist_mux.yaml" />
+		<remap from="cmd_vel_out" to="cmd_vel"/>
+	</node>
+</launch>

@@ -1,0 +1,2 @@
+adeept_awr/adeept_awr:adeept_awr/adeept_awr_description:adeept_awr/adeept_awr_gazebo:adeept_awr_ros_driver:enph353/enph353:enph353/enph353_gazebo:enph353/enph353_npcs:enph353/enph353_utils
+-DCATKIN_DEVEL_PREFIX=/home/kausikk/enph353/SHOTTA-FLOW-4-REMIX-FT.-BLUEFACE/devel -DCMAKE_INSTALL_PREFIX=/home/kausikk/enph353/SHOTTA-FLOW-4-REMIX-FT.-BLUEFACE/install -G Unix Makefiles

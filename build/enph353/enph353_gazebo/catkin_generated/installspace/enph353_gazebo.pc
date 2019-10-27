@@ -1,0 +1,8 @@
+prefix=/home/kausikk/enph353/SHOTTA-FLOW-4-REMIX-FT.-BLUEFACE/install
+
+Name: enph353_gazebo
+Description: Description of enph353_gazebo
+Version: 0.0.0
+Cflags: -I/home/kausikk/enph353/SHOTTA-FLOW-4-REMIX-FT.-BLUEFACE/install/include
+Libs: -L/home/kausikk/enph353/SHOTTA-FLOW-4-REMIX-FT.-BLUEFACE/install/lib 
+Requires: roscpp gazebo_ros
