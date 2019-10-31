@@ -1,8 +1,0 @@
-prefix=/home/kausikk/enph353/SHOTTA-FLOW-4-REMIX-FT.-BLUEFACE/devel
-
-Name: adeept_awr_description
-Description: Description of adeept_awr_description
-Version: 0.0.0
-Cflags: 
-Libs: -L/home/kausikk/enph353/SHOTTA-FLOW-4-REMIX-FT.-BLUEFACE/devel/lib 
-Requires: 

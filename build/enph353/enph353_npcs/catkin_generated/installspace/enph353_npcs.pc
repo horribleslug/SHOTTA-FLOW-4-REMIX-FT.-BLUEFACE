@@ -1,8 +1,0 @@
-prefix=/home/kausikk/enph353/SHOTTA-FLOW-4-REMIX-FT.-BLUEFACE/install
-
-Name: enph353_npcs
-Description: Description of enph353_npcs
-Version: 0.0.0
-Cflags: 
-Libs: -L/home/kausikk/enph353/SHOTTA-FLOW-4-REMIX-FT.-BLUEFACE/install/lib 
-Requires: 
