@@ -1,7 +1,0 @@
-string id
-string plate
-int8 location
-bool legal
-sensor_msgs/Image evidence
----
-bool correct
