@@ -1,3 +1,4 @@
 [submodule "src/2019F_competition_student"]
 	path = src/2019F_competition_student
 	url = https://github.com/ENPH353/2019F_competition_student
+	ignore = dirty
