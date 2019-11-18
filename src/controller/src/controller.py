@@ -27,15 +27,19 @@ INIT_FORWARD2 = 2
 INIT_TURN2 = 3
 ALIGN = 4
 STRAIGHT = 5
-PEDESTRIAN = 6
+ZEBRA = 6
+PEDESTRIAN = 7
 STOP = 100
 
 SCAN_Y1 = 580
 SCAN_Y2 = 630
-SCAN_YRED = 650
+SCAN_YZEBRA = [710, 715, 718]
+SCAN_YPED = [360, 372, 384, 396, 408, 420]
 LINE_THRESH = 5000
 TURN_THRESH = 50
+ZEBRA_THRESH = 200000
 RED_THRESH = 100000
+PED_THRESH = 11000
 
 class controller:
 
@@ -84,21 +88,41 @@ class controller:
         self.send_vel(0, 1)
         self.follow_state = STRAIGHT
     elif self.follow_state == STRAIGHT:
-      red_count = np.sum(frame[SCAN_YRED,200:1080,2] - frame[SCAN_YRED,200:1080,0])
-      red_count += np.sum(frame[SCAN_YRED+5,200:1080,2] - frame[SCAN_YRED+5,200:1080,0])
-      red_count += np.sum(frame[SCAN_YRED+10,200:1080,2] - frame[SCAN_YRED+10,200:1080,0])
+      red_count = 0
+      for i in SCAN_YZEBRA:
+        red_count += np.sum(frame[i,200:1080,2] - frame[i,200:1080,0])
+      print('red', red_count)
       if red_count > RED_THRESH:
-        self.send_vel(0, 0)
-        self.follow_state = PEDESTRIAN
+        self.send_vel(1, 0)
+        self.follow_state = ZEBRA
       elif np.abs(c3 - 870) > TURN_THRESH and c3_sum > LINE_THRESH:
         self.send_vel(0, 1 if 870 - c3 > 0 else -1)
       else:
         self.send_vel(1, 0)
+    elif self.follow_state == ZEBRA:
+      zebra_count = 0
+      for i in SCAN_YZEBRA:
+        zebra_count += np.sum(frame[i,200:1080,0])
+      print('zebra', zebra_count)
+      if zebra_count > ZEBRA_THRESH:
+        self.send_vel(0, 0)
+        self.follow_state = PEDESTRIAN
     elif self.follow_state == PEDESTRIAN:
-      print('stopped')
+      ped_count = 0
+      for i in SCAN_YPED:
+        ped_count = np.sum(frame[i,540:740,0])
+      if ped_count > PED_THRESH:
+        print('ped in front')
     elif self.follow_state == STOP:
       self.send_vel(0, 0)
       self.follow_state += 1
+
+    frame[:,:,1] = 0
+    frame[:,:,2] = 0
+    for i in SCAN_YPED:
+      cv2.line(frame, (540, i), (740, i), (0, 0, 255), 2)
+    cv2.imshow('cam', frame)
+    cv2.waitKey(1)
 
   def send_vel(self, lin, ang):
     velocity = Twist()
