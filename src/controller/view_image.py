@@ -11,20 +11,63 @@ from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge, CvBridgeError
 
+#seen = False
+n_white_pix = 0
+staticframe = np.zeros((360, 640))
+
+
 class image_converter:
+  
 
   def __init__(self):
     self.bridge = CvBridge()
     self.image_sub = rospy.Subscriber("/R1/pi_camera/image_raw", Image, self.callback)
+    self.seen = False
 
   def callback(self,data):
     try:
-      frame = self.bridge.imgmsg_to_cv2(data, "bgr8")
+      cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
     except CvBridgeError as e:
       print(e)
-    frame = cv2.resize(frame, None, fx=0.5, fy=0.5)
-    cv2.imshow("Robot Camera", frame)
-    cv2.waitKey(1)
+    
+    (rows,cols,channels) = cv_image.shape
+    #ret, frame = cv2.threshold(cv_image, 100, 255, cv2.THRESH_BINARY)
+    cv_image = cv2.resize(cv_image, None, fx=0.5, fy=0.5)
+    hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
+
+    # define range of white color in HSV
+    # change it according to your need !
+    plate_lower = np.array([0,0,90], dtype=np.uint8)
+    plate_upper = np.array([0,0,210], dtype=np.uint8)
+    platemask = cv2.inRange(hsv, plate_lower, plate_upper)
+
+    #road_lower = np.array([0,0,130], dtype=np.uint8)
+    #road_upper = np.array([0,0,255], dtype=np.uint8)
+    #roadmask = cv2.inRange(hsv, road_lower, road_upper)
+
+    #res = cv2.bitwise_and(cv_image,cv_image, mask= mask1)
+
+    cv2.imshow("Robot Camera", cv_image)
+    cv2.imshow("mask", platemask)
+    #cv2.imshow("res", res)
+
+    # SUM THA WHITE PIXELS IN MASK
+    n_white_pix = np.sum(platemask==255)
+    
+    #print(str(n_white_pix))
+
+    if n_white_pix > 7000 and self.seen is False:
+      self.seen = True
+      staticframe = cv_image
+      print("seen!")
+
+      #IMAGE SHIT GOES HERE
+
+    elif n_white_pix < 3200 and self.seen is True:
+      self.seen = False
+      
+    
+    cv2.waitKey(10)
 
 def main(args):
   ic = image_converter()
