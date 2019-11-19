@@ -29,17 +29,21 @@ ALIGN = 4
 STRAIGHT = 5
 ZEBRA = 6
 PEDESTRIAN = 7
+LEAVE_RED = 8
 STOP = 100
 
 SCAN_Y1 = 580
 SCAN_Y2 = 630
+SCAN_XGAP = 10
 SCAN_YZEBRA = [710, 715, 718]
 SCAN_YPED = [360, 372, 384, 396, 408, 420]
+LINE_FOLLOWX = 950
 LINE_THRESH = 5000
-TURN_THRESH = 50
+TURN_THRESH = 55
 ZEBRA_THRESH = 200000
 RED_THRESH = 100000
-PED_THRESH = 11000
+PED_THRESH = 12000
+ZEBRA_WAIT_FRAMES = 10
 
 class controller:
 
@@ -61,18 +65,20 @@ class controller:
       frame = self.bridge.imgmsg_to_cv2(data, "bgr8")
     except CvBridgeError as e:
       print(e)
-    ret, frame = cv2.threshold(frame, 100, 255, cv2.THRESH_BINARY)
+    ret, frame = cv2.threshold(frame, 95, 255, cv2.THRESH_BINARY)
 
-    c1_sum = np.sum(frame[SCAN_Y1,0:WIDTH/2,0]) + 0.01
-    c1 = np.sum((frame[SCAN_Y1,0:WIDTH/2,0])*self.xaxes[:,0:WIDTH/2])/c1_sum
-    c2_sum = np.sum(frame[SCAN_Y2,0:WIDTH/2,0]) + 0.01
-    c2 = np.sum((frame[SCAN_Y2,0:WIDTH/2,0])*self.xaxes[:,0:WIDTH/2])/c2_sum
-    c3_sum = np.sum(frame[SCAN_Y1,WIDTH/2:WIDTH,0]) + 0.01
-    c3 = np.sum((frame[SCAN_Y1,WIDTH/2:WIDTH,0])*self.xaxes[:,WIDTH/2:WIDTH])/c3_sum
-    c4_sum = np.sum(frame[SCAN_Y2,WIDTH/2:WIDTH,0]) + 0.01
-    c4 = np.sum((frame[SCAN_Y2,WIDTH/2:WIDTH,0])*self.xaxes[:,WIDTH/2:WIDTH])/c4_sum
+    c1_sum = np.sum(frame[SCAN_Y1,0:WIDTH/2-SCAN_XGAP,0]) + 0.01
+    c1 = np.sum((frame[SCAN_Y1,0:WIDTH/2-SCAN_XGAP,0])*self.xaxes[:,0:WIDTH/2-SCAN_XGAP])/c1_sum
+    c2_sum = np.sum(frame[SCAN_Y2,0:WIDTH/2-SCAN_XGAP,0]) + 0.01
+    c2 = np.sum((frame[SCAN_Y2,0:WIDTH/2-SCAN_XGAP,0])*self.xaxes[:,0:WIDTH/2-SCAN_XGAP])/c2_sum
+    c3_sum = np.sum(frame[SCAN_Y1,WIDTH/2+SCAN_XGAP:WIDTH,0]) + 0.01
+    c3 = np.sum((frame[SCAN_Y1,WIDTH/2+SCAN_XGAP:WIDTH,0])*self.xaxes[:,WIDTH/2+SCAN_XGAP:WIDTH])/c3_sum
+    c4_sum = np.sum(frame[SCAN_Y2,WIDTH/2+SCAN_XGAP:WIDTH,0]) + 0.01
+    c4 = np.sum((frame[SCAN_Y2,WIDTH/2+SCAN_XGAP:WIDTH,0])*self.xaxes[:,WIDTH/2+SCAN_XGAP:WIDTH])/c4_sum
 
     if self.follow_state == INIT:
+      self.wait = 0
+      self.prev_ped = 0
       self.send_vel(1, 0)
       self.follow_state = INIT_FORWARD
     elif self.follow_state == INIT_FORWARD:
@@ -91,38 +97,49 @@ class controller:
       red_count = 0
       for i in SCAN_YZEBRA:
         red_count += np.sum(frame[i,200:1080,2] - frame[i,200:1080,0])
-      print('red', red_count)
       if red_count > RED_THRESH:
         self.send_vel(1, 0)
         self.follow_state = ZEBRA
-      elif np.abs(c3 - 870) > TURN_THRESH and c3_sum > LINE_THRESH:
-        self.send_vel(0, 1 if 870 - c3 > 0 else -1)
+      elif np.abs(c3 - LINE_FOLLOWX) > TURN_THRESH and c3_sum > LINE_THRESH:
+        self.send_vel(0, 1 if LINE_FOLLOWX - c3 > 0 else -1)
       else:
         self.send_vel(1, 0)
     elif self.follow_state == ZEBRA:
+      self.send_vel(1, 0)
       zebra_count = 0
       for i in SCAN_YZEBRA:
         zebra_count += np.sum(frame[i,200:1080,0])
-      print('zebra', zebra_count)
       if zebra_count > ZEBRA_THRESH:
         self.send_vel(0, 0)
         self.follow_state = PEDESTRIAN
     elif self.follow_state == PEDESTRIAN:
       ped_count = 0
       for i in SCAN_YPED:
-        ped_count = np.sum(frame[i,540:740,0])
+        ped_count = np.sum(frame[i,440:840,0])
       if ped_count > PED_THRESH:
-        print('ped in front')
+        self.prev_ped += 1
+      elif self.prev_ped  > 0:
+        if self.wait > ZEBRA_WAIT_FRAMES:
+          self.follow_state = LEAVE_RED
+          self.wait = 0
+          self.prev_ped = 0
+          self.send_vel(1, 0)
+        else:
+          self.wait += 1
+    elif self.follow_state == LEAVE_RED:
+      red_count = 0
+      for i in SCAN_YZEBRA:
+        red_count += np.sum(frame[i,200:1080,2] - frame[i,200:1080,0])
+      if red_count > RED_THRESH * 0.75 and self.wait == 0:
+        self.wait = 1
+      elif red_count < RED_THRESH * 0.5 and self.wait > 0:
+        self.wait += 1
+      if self.wait == 2:
+        self.wait = 0
+        self.follow_state = STRAIGHT
     elif self.follow_state == STOP:
       self.send_vel(0, 0)
       self.follow_state += 1
-
-    frame[:,:,1] = 0
-    frame[:,:,2] = 0
-    for i in SCAN_YPED:
-      cv2.line(frame, (540, i), (740, i), (0, 0, 255), 2)
-    cv2.imshow('cam', frame)
-    cv2.waitKey(1)
 
   def send_vel(self, lin, ang):
     velocity = Twist()
