@@ -121,7 +121,7 @@ class controller:
       self.prev_ped = 0
       self.prev_parked = 0
       self.prev_mode = 0
-      self.parked_count = 4
+      self.parked_count = 0
       self.send_vel(1, 0)
       print('forward')
       self.follow_state = INIT_FORWARD
