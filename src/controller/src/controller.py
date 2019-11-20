@@ -49,7 +49,7 @@ PARKED_FOLLOW = 1000
 TURN_THRESH = 65
 ZEBRA_THRESH = 250000
 PED_THRESH = 4000
-PARKEDIN_THRESH = 30000
+PARKEDIN_THRESH = 20000
 PARKED_THRESH = 10000
 PARKED_COUNT_END = 6
 PARKED_WAIT_FRAMES = 14
@@ -234,7 +234,6 @@ class controller:
         if blue_mask[0, i] == 255:
           blue = i + SCAN_XPARKEDIN
           break
-      cv2.circle(image_raw, (int(blue), SCAN_YPARKEDIN), 20, (0, 255, 0), 2)
       if blue_count > PARKEDIN_THRESH:
         self.wait += 1
         if np.abs(blue - PARKED_FOLLOW) > TURN_THRESH:
@@ -246,7 +245,7 @@ class controller:
           print('inner straight white')
           self.follow_state = INNER_STRAIGHT_WHITE
       else:
-        self.send_vel(0, -1)
+        self.send_vel(1, 0)
     elif self.follow_state == STOP:
       self.send_vel(0, 0)
       self.follow_state += 1
