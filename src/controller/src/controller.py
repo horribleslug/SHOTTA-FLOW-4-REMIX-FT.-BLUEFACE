@@ -36,20 +36,20 @@ STOP = 100
 SCAN_LINE = 580
 SCAN_YZEBRA = [710, 715, 718]
 SCAN_XZEBRA = [200, 1080]
-SCAN_YPED = [379, 391, 403, 415]
+SCAN_YPED = [435, 455, 475, 495]
 SCAN_XPED = [490, 890]
 SCAN_YBLUE = 516
 SCAN_XBLUE = 100
 LINE_FOLLOWX = 960
-INNER_FOLLOWX = 280
-TURN_THRESH = 55
+INNER_FOLLOWX = 300
+TURN_THRESH = 65
 ZEBRA_THRESH = 250000
-PED_THRESH = 22000
+PED_THRESH = 4000
 PARKED_THRESH = 10000
 PARKED_COUNT_END = 6
 PARKED_WAIT_FRAMES = 12
 PED_WAIT_FRAMES = 15
-INNER_TURN_MIN_FRAMES = 50
+LINE_GAP = 100
 
 class controller:
 
@@ -80,15 +80,23 @@ class controller:
     blue_mask = cv2.inRange(frame, np.array([110,120,95]), np.array([130,255,210]))
 
     left = -1
-    for i in range(0, WIDTH):
-      if white_mask[SCAN_LINE, i] == 255 and left == -1:
-        left = i
-      elif left != -1:
-        left = (i + left)/2
-        break
+    if self.follow_state < INNER_TURN:
+      for i in range(0, WIDTH):
+        if white_mask[SCAN_LINE, i] == 255 and left == -1:
+          left = i
+        elif left != -1:
+          left = (i + left)/2
+          break
+    else:
+      for i in range(WIDTH/2-50, 0, -1):
+        if white_mask[SCAN_LINE, i] == 255 and left == -1:
+          left = i
+        elif left != -1:
+          left = (i + left)/2
+          break
 
     right = -1
-    if self.follow_state < INNER_STRAIGHT:
+    if self.follow_state < INNER_TURN:
       for i in range(WIDTH - 1, 0, -1):
         if white_mask[SCAN_LINE, i] == 255 and right == -1:
           right = i
@@ -96,7 +104,7 @@ class controller:
           right = (i + right)/2
           break
     else:
-      for i in range(int(WIDTH * 0.6), WIDTH):
+      for i in range(WIDTH/2+50, WIDTH):
         if white_mask[SCAN_LINE, i] == 255 and right == -1:
           right = i
         elif right != -1:
@@ -107,7 +115,7 @@ class controller:
       self.wait = 0
       self.prev_ped = 0
       self.prev_parked = 0
-      self.parked_count = 4
+      self.parked_count = 0
       self.send_vel(1, 0)
       print('forward')
       self.follow_state = INIT_FORWARD
@@ -153,7 +161,8 @@ class controller:
     elif self.follow_state == PEDESTRIAN:
       ped_count = 0
       for i in SCAN_YPED:
-        ped_count += np.sum(white_mask[i,SCAN_XPED[0]:SCAN_XPED[1]])
+        jean_mask = cv2.inRange(frame[i, SCAN_XPED[0]:SCAN_XPED[1]][np.newaxis,:], np.array([95, 50, 80]), np.array([110, 200, 200]))
+        ped_count += np.sum(jean_mask)
       if ped_count > PED_THRESH:
         self.prev_ped += 1
       elif self.prev_ped > 2:
@@ -170,19 +179,28 @@ class controller:
       for i in SCAN_YZEBRA:
         zebra_count += np.sum(white_mask[i,200:1080])
       if zebra_count < ZEBRA_THRESH:
-        print('straight')
-        self.follow_state = STRAIGHT
+        self.wait += 1
+        if self.wait > 1:
+          self.wait = 0
+          print('straight')
+          self.follow_state = STRAIGHT
       elif np.abs(LINE_FOLLOWX - right) > TURN_THRESH:
         self.send_vel(0, 1 if LINE_FOLLOWX - right > 0 else -1)
       else:
         self.send_vel(1, 0)
     elif self.follow_state == INNER_TURN:
-      if self.wait >= INNER_TURN_MIN_FRAMES:
+      if right < WIDTH/4 and self.wait <= 1:
+        self.wait += 1
+      elif right > WIDTH/4 and (self.wait > 1 and self.wait <= 3):
+        self.wait += 1
+      elif right < WIDTH/4 and (self.wait > 3 and self.wait <= 5):
+        self.wait += 1
+      elif right > WIDTH/4 and (self.wait > 5 and self.wait <= 12):
+        self.wait += 1
+      elif self.wait > 12:
         self.wait = 0
         print('inner straight')
         self.follow_state = INNER_STRAIGHT
-      else:
-        self.wait += 1
       if INNER_FOLLOWX - left > TURN_THRESH:
         self.send_vel(0, 1)
       elif left > WIDTH/2:
@@ -200,9 +218,9 @@ class controller:
       self.send_vel(0, 0)
       self.follow_state += 1
 
-    cv2.circle(white_mask, (int(right), SCAN_LINE), 20, (255, 0, 0), 2)
-
-    cv2.imshow('cam', white_mask)
+    cv2.circle(image_raw, (int(right), SCAN_LINE), 20, (255, 0, 0), 2)
+    cv2.circle(image_raw, (int(left), SCAN_LINE), 20, (0, 0, 255), 2)
+    cv2.imshow('cam', image_raw)
     cv2.waitKey(1)
 
   def send_vel(self, lin, ang):
