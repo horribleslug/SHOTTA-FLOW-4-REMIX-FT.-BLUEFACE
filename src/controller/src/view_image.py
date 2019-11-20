@@ -7,13 +7,14 @@ import sys
 import rospy
 import cv2
 import numpy as np
+import os
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge, CvBridgeError
 
 #seen = False
 n_white_pix = 0
-staticframe = np.zeros((360, 640))
+#staticframe = np.zeros((360, 640))
 
 
 class image_converter:
@@ -23,6 +24,8 @@ class image_converter:
     self.bridge = CvBridge()
     self.image_sub = rospy.Subscriber("/R1/pi_camera/image_raw", Image, self.callback)
     self.seen = False
+    self.PATH = os.path.dirname(os.path.realpath(__file__)) + "/runpics/"
+    self.count = 0
 
   def callback(self,data):
     try:
@@ -56,16 +59,18 @@ class image_converter:
     
     #print(str(n_white_pix))
 
-    if n_white_pix > 7000 and self.seen is False:
+    if n_white_pix > 6000 and self.seen is False:
       self.seen = True
-      staticframe = cv_image
-      print("seen!")
+      cv2.imwrite(os.path.join(self.PATH, "run_{}.png".format(self.count)), cv_image)
+      cv2.imwrite(os.path.join(self.PATH, "mask_{}.png".format(self.count)), platemask)
+      self.count = self.count + 1
+      print("seen :~)")
 
-      #IMAGE SHIT GOES HERE
+      #SEND TO CORNER FINDER
 
     elif n_white_pix < 3200 and self.seen is True:
       self.seen = False
-      
+      print("not seen :~(")
     
     cv2.waitKey(10)
 
