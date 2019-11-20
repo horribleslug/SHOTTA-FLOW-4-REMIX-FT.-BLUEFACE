@@ -27,22 +27,22 @@ INIT_FORWARD2 = 2
 INIT_TURN2 = 3
 ALIGN = 4
 STRAIGHT = 5
-ZEBRA = 6
-PEDESTRIAN = 7
-LEAVE_RED = 8
+PEDESTRIAN = 6
+LEAVE_RED = LEAVE_ZEBRA = 7
+INNER_TURN = 8
+INNER_STRAIGHT = 9
 STOP = 100
 
 SCAN_Y1 = 580
-SCAN_Y2 = 630
-SCAN_XGAP = 10
+SCAN_YBLUE = 470
+SCAN_XBLUE = 200
 SCAN_YZEBRA = [710, 715, 718]
-SCAN_YPED = [360, 372, 384, 396, 408, 420]
-LINE_FOLLOWX = 950
+SCAN_YPED = [379, 391, 403, 415]
+LINE_FOLLOWX = 960
 LINE_THRESH = 5000
-TURN_THRESH = 55
-ZEBRA_THRESH = 200000
-RED_THRESH = 100000
-PED_THRESH = 12000
+TURN_THRESH = 50
+ZEBRA_THRESH = 250000
+PED_THRESH = 22000
 ZEBRA_WAIT_FRAMES = 10
 
 class controller:
@@ -65,78 +65,87 @@ class controller:
       frame = self.bridge.imgmsg_to_cv2(data, "bgr8")
     except CvBridgeError as e:
       print(e)
-    ret, frame = cv2.threshold(frame, 95, 255, cv2.THRESH_BINARY)
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-    c1_sum = np.sum(frame[SCAN_Y1,0:WIDTH/2-SCAN_XGAP,0]) + 0.01
-    c1 = np.sum((frame[SCAN_Y1,0:WIDTH/2-SCAN_XGAP,0])*self.xaxes[:,0:WIDTH/2-SCAN_XGAP])/c1_sum
-    c2_sum = np.sum(frame[SCAN_Y2,0:WIDTH/2-SCAN_XGAP,0]) + 0.01
-    c2 = np.sum((frame[SCAN_Y2,0:WIDTH/2-SCAN_XGAP,0])*self.xaxes[:,0:WIDTH/2-SCAN_XGAP])/c2_sum
-    c3_sum = np.sum(frame[SCAN_Y1,WIDTH/2+SCAN_XGAP:WIDTH,0]) + 0.01
-    c3 = np.sum((frame[SCAN_Y1,WIDTH/2+SCAN_XGAP:WIDTH,0])*self.xaxes[:,WIDTH/2+SCAN_XGAP:WIDTH])/c3_sum
-    c4_sum = np.sum(frame[SCAN_Y2,WIDTH/2+SCAN_XGAP:WIDTH,0]) + 0.01
-    c4 = np.sum((frame[SCAN_Y2,WIDTH/2+SCAN_XGAP:WIDTH,0])*self.xaxes[:,WIDTH/2+SCAN_XGAP:WIDTH])/c4_sum
+    white_mask = cv2.inRange(frame, np.array([0,0,100]), np.array([255,0,255]))
+
+    left = -1
+    for i in range(0, WIDTH):
+      if white_mask[SCAN_Y1, i] == 255 and left == -1:
+        left = i
+      elif left != -1:
+        left = (i + left)/2
+        break
+
+    right = -1
+    for i in range(WIDTH - 1, 0, -1):
+      if white_mask[SCAN_Y1, i] == 255 and right == -1:
+        right = i
+      elif right != -1:
+        right = (i + right)/2
+        break
 
     if self.follow_state == INIT:
       self.wait = 0
       self.prev_ped = 0
       self.send_vel(1, 0)
+      print('forward')
       self.follow_state = INIT_FORWARD
     elif self.follow_state == INIT_FORWARD:
-      if c1_sum < LINE_THRESH and c2_sum < LINE_THRESH:
+      if left == -1:
         self.send_vel(0, 1)
+        print('turn')
         self.follow_state = INIT_TURN
     elif self.follow_state == INIT_TURN:
-      if c1 > 200 and c2 > 200:
+      if left >= 170:
         self.send_vel(1, 0)
+        print('forward2')
         self.follow_state = INIT_FORWARD2
     elif self.follow_state == INIT_FORWARD2:
-      if c3_sum > LINE_THRESH and c3 < 800:
-        self.send_vel(0, 1)
+      if right <= 900 and right > 700:
+        print('straight')
         self.follow_state = STRAIGHT
     elif self.follow_state == STRAIGHT:
-      red_count = 0
-      for i in SCAN_YZEBRA:
-        red_count += np.sum(frame[i,200:1080,2] - frame[i,200:1080,0])
-      if red_count > RED_THRESH:
-        self.send_vel(1, 0)
-        self.follow_state = ZEBRA
-      elif np.abs(c3 - LINE_FOLLOWX) > TURN_THRESH and c3_sum > LINE_THRESH:
-        self.send_vel(0, 1 if LINE_FOLLOWX - c3 > 0 else -1)
-      else:
-        self.send_vel(1, 0)
-    elif self.follow_state == ZEBRA:
-      self.send_vel(1, 0)
       zebra_count = 0
       for i in SCAN_YZEBRA:
-        zebra_count += np.sum(frame[i,200:1080,0])
+        zebra_count += np.sum(white_mask[i,200:1080])
       if zebra_count > ZEBRA_THRESH:
         self.send_vel(0, 0)
+        print('ped')
         self.follow_state = PEDESTRIAN
+      elif np.abs(right - LINE_FOLLOWX) > TURN_THRESH:
+        self.send_vel(0, 1 if LINE_FOLLOWX - right > 0 else -1)
+      else:
+        self.send_vel(1, 0)
     elif self.follow_state == PEDESTRIAN:
       ped_count = 0
       for i in SCAN_YPED:
-        ped_count = np.sum(frame[i,440:840,0])
+        ped_count += np.sum(white_mask[i,490:890])
+      print(ped_count)
       if ped_count > PED_THRESH:
         self.prev_ped += 1
       elif self.prev_ped  > 0:
         if self.wait > ZEBRA_WAIT_FRAMES:
-          self.follow_state = LEAVE_RED
+          print('leave zebra')
+          self.follow_state = LEAVE_ZEBRA
           self.wait = 0
           self.prev_ped = 0
           self.send_vel(1, 0)
         else:
           self.wait += 1
-    elif self.follow_state == LEAVE_RED:
-      red_count = 0
+    elif self.follow_state == LEAVE_ZEBRA:
+      zebra_count = 0
       for i in SCAN_YZEBRA:
-        red_count += np.sum(frame[i,200:1080,2] - frame[i,200:1080,0])
-      if red_count > RED_THRESH * 0.75 and self.wait == 0:
-        self.wait = 1
-      elif red_count < RED_THRESH * 0.5 and self.wait > 0:
-        self.wait += 1
-      if self.wait == 2:
-        self.wait = 0
+        zebra_count += np.sum(white_mask[i,200:1080])
+      if zebra_count < ZEBRA_THRESH:
+        print('straight')
         self.follow_state = STRAIGHT
+      elif np.abs(right - LINE_FOLLOWX) > TURN_THRESH:
+        self.send_vel(0, 1 if LINE_FOLLOWX - right > 0 else -1)
+      else:
+        self.send_vel(1, 0)
+    elif self.follow_state == INNER_TURN:
+      pass
     elif self.follow_state == STOP:
       self.send_vel(0, 0)
       self.follow_state += 1
