@@ -20,36 +20,43 @@ VEL_TOPIC = '/R1/cmd_vel'
 WIDTH = 1280
 HEIGHT = 720
 
-INIT = -1
-INIT_FORWARD = 0
-INIT_TURN = 1
-INIT_FORWARD2 = 2
-INIT_TURN2 = 3
-ALIGN = 4
-STRAIGHT = 5
-PEDESTRIAN = 6
-LEAVE_ZEBRA = 7
-INNER_TURN = 8
-INNER_STRAIGHT = 9
+INIT = 0
+INIT_FORWARD = 1
+INIT_TURN = 2
+INIT_FORWARD2 = 3
+INIT_TURN2 = 4
+ALIGN = 5
+STRAIGHT = 6
+PEDESTRIAN = 7
+LEAVE_ZEBRA = 8
+INNER_TURN = 9
+INNER_STRAIGHT_WHITE = 10
+INNER_STRAIGHT_BLUE = 11
 STOP = 100
 
-SCAN_LINE = 580
+SCAN_YFOLLOW = 580
 SCAN_YZEBRA = [710, 715, 718]
 SCAN_XZEBRA = [200, 1080]
 SCAN_YPED = [435, 455, 475, 495]
 SCAN_XPED = [490, 890]
-SCAN_YBLUE = 516
-SCAN_XBLUE = 100
-LINE_FOLLOWX = 960
-INNER_FOLLOWX = 300
+SCAN_YPARKEDIN = 515
+SCAN_XPARKEDIN = 800
+SCAN_YPARKED = 516
+SCAN_XPARKED = 100
+RIGHT_FOLLOW = 960
+LEFT_FOLLOW = 300
+PARKED_FOLLOW = 1000
 TURN_THRESH = 65
 ZEBRA_THRESH = 250000
 PED_THRESH = 4000
+PARKEDIN_THRESH = 30000
 PARKED_THRESH = 10000
 PARKED_COUNT_END = 6
-PARKED_WAIT_FRAMES = 12
+PARKED_WAIT_FRAMES = 14
+INNER_TURN_WAIT_FRAMES = 12
 PED_WAIT_FRAMES = 15
-LINE_GAP = 100
+INNER_SWITCH_WAIT_FRAMES = 6
+
 WHITE_MASK = [np.array([0,0,100]), np.array([255,0,255])]
 BLUE_MASK = [np.array([110,120,95]), np.array([130,255,210])]
 JEAN_MASK = [np.array([95, 50, 80]), np.array([110, 200, 200])]
@@ -73,25 +80,21 @@ class controller:
       image_raw = self.bridge.imgmsg_to_cv2(data, "bgr8")
     except CvBridgeError as e:
       print(e)
-    frame = cv2.cvtColor(image_raw, cv2.COLOR_BGR2HSV)
-    if self.prevx != -1:
-      print(self.prevy, self.prevx, frame[self.prevy, self.prevx])
-      self.prevx = -1
-      self.prevy = -1
 
+    frame = cv2.cvtColor(image_raw, cv2.COLOR_BGR2HSV)
     white_mask = cv2.inRange(frame, *WHITE_MASK)
 
     left = -1
     if self.follow_state < INNER_TURN:
       for i in range(0, WIDTH):
-        if white_mask[SCAN_LINE, i] == 255 and left == -1:
+        if white_mask[SCAN_YFOLLOW, i] == 255 and left == -1:
           left = i
         elif left != -1:
           left = (i + left)/2
           break
     else:
       for i in range(WIDTH/2-50, 0, -1):
-        if white_mask[SCAN_LINE, i] == 255 and left == -1:
+        if white_mask[SCAN_YFOLLOW, i] == 255 and left == -1:
           left = i
         elif left != -1:
           left = (i + left)/2
@@ -100,14 +103,14 @@ class controller:
     right = -1
     if self.follow_state < INNER_TURN:
       for i in range(WIDTH - 1, 0, -1):
-        if white_mask[SCAN_LINE, i] == 255 and right == -1:
+        if white_mask[SCAN_YFOLLOW, i] == 255 and right == -1:
           right = i
         elif right != -1:
           right = (i + right)/2
           break
     else:
       for i in range(WIDTH/2+50, WIDTH):
-        if white_mask[SCAN_LINE, i] == 255 and right == -1:
+        if white_mask[SCAN_YFOLLOW, i] == 255 and right == -1:
           right = i
         elif right != -1:
           right = (i + right)/2
@@ -117,7 +120,8 @@ class controller:
       self.wait = 0
       self.prev_ped = 0
       self.prev_parked = 0
-      self.parked_count = 0
+      self.prev_mode = 0
+      self.parked_count = 4
       self.send_vel(1, 0)
       print('forward')
       self.follow_state = INIT_FORWARD
@@ -139,7 +143,7 @@ class controller:
       zebra_count = 0
       for i in SCAN_YZEBRA:
         zebra_count += np.sum(white_mask[i,SCAN_XZEBRA[0]:SCAN_XZEBRA[1]])
-      blue_count = np.sum(cv2.inRange(frame[SCAN_YBLUE,0:SCAN_XBLUE][np.newaxis,:], *BLUE_MASK))
+      blue_count = np.sum(cv2.inRange(frame[SCAN_YPARKED,0:SCAN_XPARKED][np.newaxis,:], *BLUE_MASK))
       if blue_count > PARKED_THRESH:
         self.prev_parked = 1
       elif self.prev_parked > PARKED_WAIT_FRAMES:
@@ -156,8 +160,8 @@ class controller:
         self.send_vel(0, 0)
         print('ped')
         self.follow_state = PEDESTRIAN
-      elif np.abs(right - LINE_FOLLOWX) > TURN_THRESH:
-        self.send_vel(0, 1 if LINE_FOLLOWX - right > 0 else -1)
+      elif np.abs(right - RIGHT_FOLLOW) > TURN_THRESH:
+        self.send_vel(0, 1 if RIGHT_FOLLOW - right > 0 else -1)
       else:
         self.send_vel(1, 0)    
     elif self.follow_state == PEDESTRIAN:
@@ -185,8 +189,8 @@ class controller:
           self.wait = 0
           print('straight')
           self.follow_state = STRAIGHT
-      elif np.abs(LINE_FOLLOWX - right) > TURN_THRESH:
-        self.send_vel(0, 1 if LINE_FOLLOWX - right > 0 else -1)
+      elif np.abs(RIGHT_FOLLOW - right) > TURN_THRESH:
+        self.send_vel(0, 1 if RIGHT_FOLLOW - right > 0 else -1)
       else:
         self.send_vel(1, 0)
     elif self.follow_state == INNER_TURN:
@@ -196,33 +200,65 @@ class controller:
         self.wait += 1
       elif right < WIDTH/4 and (self.wait > 3 and self.wait <= 5):
         self.wait += 1
-      elif right > WIDTH/4 and (self.wait > 5 and self.wait <= 12):
+      elif right > WIDTH/4 and (self.wait > 5 and self.wait < INNER_TURN_WAIT_FRAMES):
         self.wait += 1
-      elif self.wait > 12:
+      elif self.wait >= INNER_TURN_WAIT_FRAMES:
         self.wait = 0
-        print('inner straight')
-        self.follow_state = INNER_STRAIGHT
-      if INNER_FOLLOWX - left > TURN_THRESH:
+        print('inner straight white')
+        self.follow_state = INNER_STRAIGHT_WHITE
+      if LEFT_FOLLOW - left > TURN_THRESH:
         self.send_vel(0, 1)
       elif left > WIDTH/2:
         self.send_vel(0, -1)
       else:
         self.send_vel(1, 0)
-    elif self.follow_state == INNER_STRAIGHT:
-      if right < WIDTH/6:
-        self.send_vel(1, 0)
-      elif np.abs(right - LINE_FOLLOWX) > TURN_THRESH:
-        self.send_vel(0, 1 if LINE_FOLLOWX - right > 0 else -1)
+    elif self.follow_state == INNER_STRAIGHT_WHITE:
+      blue_count = np.sum(cv2.inRange(frame[SCAN_YPARKEDIN,SCAN_XPARKEDIN:WIDTH][np.newaxis,:], *BLUE_MASK))
+      if right > WIDTH/4:
+        self.wait += 1
+        if np.abs(right - RIGHT_FOLLOW) > TURN_THRESH:
+          self.send_vel(0, 1 if RIGHT_FOLLOW - right > 0 else -1)
+        else:
+          self.send_vel(1, 0)
+      elif blue_count > PARKEDIN_THRESH and self.wait >= INNER_SWITCH_WAIT_FRAMES:
+        self.wait = 0
+        print('inner straight blue')
+        self.follow_state = INNER_STRAIGHT_BLUE
       else:
-        self.send_vel(1, 0)  
+        self.send_vel(1, 0)
+    elif self.follow_state == INNER_STRAIGHT_BLUE:
+      blue_mask = cv2.inRange(frame[SCAN_YPARKEDIN,SCAN_XPARKEDIN:WIDTH][np.newaxis,:], *BLUE_MASK)
+      blue_count = np.sum(blue_mask)
+      blue = -1
+      for i in range(WIDTH - SCAN_XPARKEDIN):
+        if blue_mask[0, i] == 255:
+          blue = i + SCAN_XPARKEDIN
+          break
+      cv2.circle(image_raw, (int(blue), SCAN_YPARKEDIN), 20, (0, 255, 0), 2)
+      if blue_count > PARKEDIN_THRESH:
+        self.wait += 1
+        if np.abs(blue - PARKED_FOLLOW) > TURN_THRESH:
+          self.send_vel(0, 1 if PARKED_FOLLOW - blue > 0 else -1)
+        else:
+          self.send_vel(1, 0)
+      elif right > WIDTH/4 and self.wait >= INNER_SWITCH_WAIT_FRAMES:
+          self.wait = 0
+          print('inner straight white')
+          self.follow_state = INNER_STRAIGHT_WHITE
+      else:
+        self.send_vel(0, -1)
     elif self.follow_state == STOP:
       self.send_vel(0, 0)
       self.follow_state += 1
 
-    cv2.circle(image_raw, (int(right), SCAN_LINE), 20, (255, 0, 0), 2)
-    cv2.circle(image_raw, (int(left), SCAN_LINE), 20, (0, 0, 255), 2)
+    cv2.circle(image_raw, (int(right), SCAN_YFOLLOW), 20, (0, 0, 255), 2)
+    cv2.circle(image_raw, (int(left), SCAN_YFOLLOW), 20, (255, 0, 0), 2)
     cv2.imshow('cam', image_raw)
     cv2.waitKey(1)
+    if self.prevx != -1:
+      print(self.prevy, self.prevx, frame[self.prevy, self.prevx])
+      self.prevx = -1
+      self.prevy = -1
 
   def send_vel(self, lin, ang):
     velocity = Twist()
