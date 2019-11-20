@@ -50,6 +50,9 @@ PARKED_COUNT_END = 6
 PARKED_WAIT_FRAMES = 12
 PED_WAIT_FRAMES = 15
 LINE_GAP = 100
+WHITE_MASK = [np.array([0,0,100]), np.array([255,0,255])]
+BLUE_MASK = [np.array([110,120,95]), np.array([130,255,210])]
+JEAN_MASK = [np.array([95, 50, 80]), np.array([110, 200, 200])]
 
 class controller:
 
@@ -76,8 +79,7 @@ class controller:
       self.prevx = -1
       self.prevy = -1
 
-    white_mask = cv2.inRange(frame, np.array([0,0,100]), np.array([255,0,255]))
-    blue_mask = cv2.inRange(frame, np.array([110,120,95]), np.array([130,255,210]))
+    white_mask = cv2.inRange(frame, *WHITE_MASK)
 
     left = -1
     if self.follow_state < INNER_TURN:
@@ -137,7 +139,7 @@ class controller:
       zebra_count = 0
       for i in SCAN_YZEBRA:
         zebra_count += np.sum(white_mask[i,SCAN_XZEBRA[0]:SCAN_XZEBRA[1]])
-      blue_count = np.sum(blue_mask[SCAN_YBLUE,0:SCAN_XBLUE])
+      blue_count = np.sum(cv2.inRange(frame[SCAN_YBLUE,0:SCAN_XBLUE][np.newaxis,:], *BLUE_MASK))
       if blue_count > PARKED_THRESH:
         self.prev_parked = 1
       elif self.prev_parked > PARKED_WAIT_FRAMES:
@@ -161,8 +163,7 @@ class controller:
     elif self.follow_state == PEDESTRIAN:
       ped_count = 0
       for i in SCAN_YPED:
-        jean_mask = cv2.inRange(frame[i, SCAN_XPED[0]:SCAN_XPED[1]][np.newaxis,:], np.array([95, 50, 80]), np.array([110, 200, 200]))
-        ped_count += np.sum(jean_mask)
+        ped_count += np.sum(cv2.inRange(frame[i, SCAN_XPED[0]:SCAN_XPED[1]][np.newaxis,:], *JEAN_MASK))
       if ped_count > PED_THRESH:
         self.prev_ped += 1
       elif self.prev_ped > 2:
