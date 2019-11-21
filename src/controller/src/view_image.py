@@ -35,7 +35,7 @@ class image_converter:
     
     (rows,cols,channels) = cv_image.shape
     #ret, frame = cv2.threshold(cv_image, 100, 255, cv2.THRESH_BINARY)
-    cv_image = cv2.resize(cv_image, None, fx=0.5, fy=0.5)
+    #cv_image = cv2.resize(cv_image, None, fx=0.5, fy=0.5)
     hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
 
     # define range of white color in HSV
@@ -43,6 +43,7 @@ class image_converter:
     plate_lower = np.array([0,0,90], dtype=np.uint8)
     plate_upper = np.array([0,0,210], dtype=np.uint8)
     platemask = cv2.inRange(hsv, plate_lower, plate_upper)
+    #platemask = cv2.blur(platemask, (3, 3))
 
     #road_lower = np.array([0,0,130], dtype=np.uint8)
     #road_upper = np.array([0,0,255], dtype=np.uint8)
@@ -59,7 +60,7 @@ class image_converter:
     
     #print(str(n_white_pix))
 
-    if n_white_pix > 6000 and self.seen is False:
+    if n_white_pix > 23000 and self.seen is False:
       self.seen = True
       cv2.imwrite(os.path.join(self.PATH, "run_{}.png".format(self.count)), cv_image)
       cv2.imwrite(os.path.join(self.PATH, "mask_{}.png".format(self.count)), platemask)
@@ -68,11 +69,14 @@ class image_converter:
 
       #SEND TO CORNER FINDER
 
-    elif n_white_pix < 3200 and self.seen is True:
+    elif n_white_pix < 12000 and self.seen is True:
       self.seen = False
       print("not seen :~(")
     
     cv2.waitKey(10)
+
+#def cornerfinder(maskpic):
+
 
 def main(args):
   ic = image_converter()
