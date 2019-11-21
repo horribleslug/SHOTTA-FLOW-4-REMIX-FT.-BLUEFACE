@@ -1,9 +1,9 @@
 import numpy as np
 import cv2
 
-filename = 'mask_2.png'
+filename = 'mask_0.png'
 img = cv2.imread(filename)
-filename2 = 'run_2.png'
+filename2 = 'run_0.png'
 rawimg = cv2.imread(filename2)
 
 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
