@@ -165,11 +165,11 @@ class image_converter:
     
     dst2 = np.array([
       [0, 0],
-      [299, 0]
-      [299, 299]
+      [299, 0],
+      [299, 299],
       [0, 299]], dtype = "float32")
 
-    ptstop = np.array([toplefts[0], toprights[0], botrights[0], botlefts[0]], dtype = "float32")
+    ptstop = np.array([toplefts[1], toprights[1], botrights[1], botlefts[1]], dtype = "float32")
     ptsplate = np.array([botlefts[1], botrights[1], toprights[0], toplefts[0]], dtype = "float32")
 
     M = cv2.getPerspectiveTransform(ptsplate, dst)
