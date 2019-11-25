@@ -10,11 +10,19 @@ from PIL import Image, ImageFont, ImageDraw
 
 path = os.path.dirname(os.path.realpath(__file__)) + "/"
 
-CLEAN = 16
-BLUR = 16
+CLEAN = 4
+BLUR = 200
 #STRETCH = 16
 
 #'''
+def adjust_gamma(image, gamma=1.0):
+
+   invGamma = 1.0 / gamma
+   table = np.array([((i / 255.0) ** invGamma) * 255
+      for i in np.arange(0, 256)]).astype("uint8")
+
+   return cv2.LUT(image, table)
+'''
 for i in range(0, CLEAN):
 
     # Pick two random letters
@@ -40,11 +48,15 @@ for i in range(0, CLEAN):
     # Convert back to OpenCV image and save
     blank_plate = np.array(blank_plate_pil)
 
+    # Darken it
+    gamma = 4.0/randint(8, 16)
+    blank_plate = adjust_gamma(blank_plate, gamma)
+
     # Write license plate to file
     cv2.imwrite(os.path.join(path + "pictures/", 
                                 "plate_{}{}.png".format(plate_alpha, plate_num)),
                 blank_plate)
-#'''
+'''
 #'''
 for i in range(0, BLUR):
     # Pick two random letters
@@ -70,10 +82,15 @@ for i in range(0, BLUR):
     # Convert back to OpenCV image and save
     blank_plate = np.array(blank_plate_pil)
 
+    # Darken
+    gamma = 4.0/randint(8, 16)
+    blank_plate = adjust_gamma(blank_plate, gamma)
+
     # Apply Blur
-    kernsize = randint(10, 20)
-    #kernsize = 10
-    blank_plate = cv2.blur(blank_plate,(kernsize,kernsize))
+    kernsize = randint(12, 25)
+    #blank_plate = cv2.blur(blank_plate,(kernsize,kernsize))
+    kernel = np.ones((kernsize,kernsize),np.float32)/(kernsize**2)
+    blank_plate = cv2.filter2D(blank_plate,-1,kernel)
 
     # Write license plate to file
     cv2.imwrite(os.path.join(path + "pictures/", 
