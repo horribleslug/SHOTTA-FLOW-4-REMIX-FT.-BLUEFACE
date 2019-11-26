@@ -30,8 +30,8 @@ STRAIGHT = 6
 PEDESTRIAN = 7
 LEAVE_ZEBRA = 8
 INNER_TURN = 9
-INNER_STRAIGHT_WHITE = 10
-INNER_STRAIGHT_BLUE = 11
+INNER_STRAIGHT = 10
+WAIT_FOR_TRUCK = 11
 STOP = 100
 
 SCAN_YFOLLOW = 580
@@ -39,14 +39,11 @@ SCAN_YZEBRA = [710, 715, 718]
 SCAN_XZEBRA = [200, 1080]
 SCAN_YPED = [435, 455, 475, 495]
 SCAN_XPED = [490, 890]
-SCAN_YSWITCH = 490
-SCAN_YPARKEDIN = 515
-SCAN_XPARKEDIN = 800
 SCAN_YPARKED = 516
 SCAN_XPARKED = 100
+RIGHT_FOLLOW_BLUE = 1020
 RIGHT_FOLLOW = 960
 LEFT_FOLLOW = 300
-PARKED_FOLLOW = 1000
 TURN_THRESH = 50
 ZEBRA_THRESH = 250000
 PED_THRESH = 4000
@@ -56,16 +53,18 @@ PARKED_COUNT_END = 6
 PARKED_WAIT_FRAMES = 14
 INNER_TURN_WAIT_FRAMES = 12
 PED_WAIT_FRAMES = 15
-INNER_SWITCH_WAIT_FRAMES = 4
+TRUCK_WAIT_FRAMES = 50
+TRUCK_AREA_THRESH = 20000
 
 WHITE_MASK = [np.array([0,0,100]), np.array([255,0,255])]
 BLUE_MASK = [np.array([110,120,95]), np.array([130,255,210])]
 JEAN_MASK = [np.array([95, 50, 80]), np.array([110, 200, 200])]
-TRUCK_MASK = [np.array([0, 0, 0]), np.array([0, 0, 100])]
+TRUCK_MASK1 = [np.array([0, 0, 10]), np.array([0, 0, 35])]
+TRUCK_MASK2 = [np.array([0, 0, 50]), np.array([0, 0, 75])]
 
 class controller:
 
-  def __init__(self, state=STOP):
+  def __init__(self, state=INIT):
     self.bridge = CvBridge()
     self.vel_pub = rospy.Publisher(VEL_TOPIC, Twist, queue_size=30)
     self.image_sub = rospy.Subscriber(IMAGE_TOPIC, Image, self.callback)
@@ -84,20 +83,20 @@ class controller:
       print(e)
 
     frame = cv2.cvtColor(image_raw, cv2.COLOR_BGR2HSV)
-    white_mask = cv2.inRange(frame, *WHITE_MASK)
-    truck_mask = cv2.inRange(frame, *TRUCK_MASK)
 
     left = -1
     if self.follow_state < INNER_TURN:
+      line_mask = cv2.inRange(frame[SCAN_YFOLLOW,0:WIDTH][np.newaxis,:], *WHITE_MASK)
       for i in range(0, WIDTH):
-        if white_mask[SCAN_YFOLLOW, i] == 255 and left == -1:
+        if line_mask[0, i] == 255 and left == -1:
           left = i
         elif left != -1:
           left = (i + left)/2
           break
-    else:
-      for i in range(WIDTH/2-50, 0, -1):
-        if white_mask[SCAN_YFOLLOW, i] == 255 and left == -1:
+    elif self.follow_state < INNER_STRAIGHT:
+      line_mask = cv2.inRange(frame[SCAN_YFOLLOW,0:WIDTH/2-50][np.newaxis,:], *WHITE_MASK)
+      for i in range(WIDTH/2-50-1, 0, -1):
+        if line_mask[0, i] == 255 and left == -1:
           left = i
         elif left != -1:
           left = (i + left)/2
@@ -105,33 +104,37 @@ class controller:
 
     right = -1
     if self.follow_state < INNER_TURN:
+      line_mask = cv2.inRange(frame[SCAN_YFOLLOW,0:WIDTH][np.newaxis,:], *WHITE_MASK)
       for i in range(WIDTH - 1, 0, -1):
-        if white_mask[SCAN_YFOLLOW, i] == 255 and right == -1:
-          right = i
-        elif right != -1:
-          right = (i + right)/2
-          break
-    elif self.follow_state == INNER_STRAIGHT_BLUE:
-      for i in range(WIDTH/2+50, WIDTH):
-        if white_mask[SCAN_YSWITCH, i] == 255 and right == -1:
+        if line_mask[0, i] == 255 and right == -1:
           right = i
         elif right != -1:
           right = (i + right)/2
           break
     else:
-      for i in range(WIDTH/2+50, WIDTH):
-        if white_mask[SCAN_YFOLLOW, i] == 255 and right == -1:
-          right = i
-        elif right != -1:
-          right = (i + right)/2
+      line_mask = cv2.inRange(frame[SCAN_YFOLLOW,WIDTH/2+50:WIDTH][np.newaxis,:], *WHITE_MASK)
+      line_mask += cv2.inRange(frame[SCAN_YFOLLOW,WIDTH/2+50:WIDTH][np.newaxis,:], *BLUE_MASK)
+      for i in range(0, WIDTH/2-50):
+        if line_mask[0, i] == 255:
+          right = i + WIDTH/2+50
           break
+      right2 = -1
+      line_mask = cv2.inRange(frame[SCAN_YFOLLOW+50,WIDTH/2+50:WIDTH][np.newaxis,:], *WHITE_MASK)
+      line_mask += cv2.inRange(frame[SCAN_YFOLLOW+50,WIDTH/2+50:WIDTH][np.newaxis,:], *BLUE_MASK)
+      for i in range(0, WIDTH/2-50):
+        if line_mask[0, i] == 255:
+          right2 = i + WIDTH/2+50
+          break
+      if right2 < right and right2 != -1:
+        right = right2
 
     if self.follow_state == INIT:
       self.wait = 0
       self.prev_ped = 0
       self.prev_parked = 0
-      self.prev_mode = 0
-      self.parked_count = 0
+      self.parked_count = 4
+      self.truck_wait = 0
+      self.truck_prev_state = -1
       self.send_vel(1, 0)
       print('forward')
       self.follow_state = INIT_FORWARD
@@ -152,7 +155,7 @@ class controller:
     elif self.follow_state == STRAIGHT:
       zebra_count = 0
       for i in SCAN_YZEBRA:
-        zebra_count += np.sum(white_mask[i,SCAN_XZEBRA[0]:SCAN_XZEBRA[1]])
+        zebra_count += np.sum(cv2.inRange(frame[i,SCAN_XZEBRA[0]:SCAN_XZEBRA[1]][np.newaxis,:], *WHITE_MASK))
       blue_count = np.sum(cv2.inRange(frame[SCAN_YPARKED,0:SCAN_XPARKED][np.newaxis,:], *BLUE_MASK))
       if blue_count > PARKED_THRESH:
         self.prev_parked = 1
@@ -192,7 +195,7 @@ class controller:
     elif self.follow_state == LEAVE_ZEBRA:
       zebra_count = 0
       for i in SCAN_YZEBRA:
-        zebra_count += np.sum(white_mask[i,200:1080])
+        zebra_count += np.sum(cv2.inRange(frame[i,SCAN_XZEBRA[0]:SCAN_XZEBRA[1]][np.newaxis,:], *WHITE_MASK))
       if zebra_count < ZEBRA_THRESH:
         self.wait += 1
         if self.wait > 1:
@@ -214,50 +217,56 @@ class controller:
         self.wait += 1
       elif self.wait >= INNER_TURN_WAIT_FRAMES:
         self.wait = 0
-        print('inner straight white')
-        self.follow_state = INNER_STRAIGHT_WHITE
+        print('inner straight')
+        self.follow_state = INNER_STRAIGHT
       if LEFT_FOLLOW - left > TURN_THRESH:
         self.send_vel(0, 1)
       elif left > WIDTH/2:
         self.send_vel(0, -1)
       else:
         self.send_vel(1, 0)
-    elif self.follow_state == INNER_STRAIGHT_WHITE:
-      blue_count = np.sum(cv2.inRange(frame[SCAN_YPARKEDIN,SCAN_XPARKEDIN:WIDTH][np.newaxis,:], *BLUE_MASK))
+    elif self.follow_state == INNER_STRAIGHT:
       if right > WIDTH/4:
-        if np.abs(right - RIGHT_FOLLOW) > TURN_THRESH:
-          self.send_vel(0, 1 if RIGHT_FOLLOW - right > 0 else -1)
+        mask = cv2.inRange(frame[SCAN_YFOLLOW, right][np.newaxis,np.newaxis,:], *BLUE_MASK)
+        xdest = RIGHT_FOLLOW_BLUE if mask[0, 0] == 255 else RIGHT_FOLLOW
+        if np.abs(right - xdest) > TURN_THRESH:
+          self.send_vel(0, 1 if xdest - right > 0 else -1)
         else:
           self.send_vel(1, 0)
-      elif blue_count > PARKEDIN_THRESH:
-        print('inner straight blue')
-        self.follow_state = INNER_STRAIGHT_BLUE
       else:
         self.send_vel(1, 0)
-    elif self.follow_state == INNER_STRAIGHT_BLUE:
-      blue_mask = cv2.inRange(frame[SCAN_YPARKEDIN,SCAN_XPARKEDIN:WIDTH][np.newaxis,:], *BLUE_MASK)
-      blue_count = np.sum(blue_mask)
-      blue = -1
-      for i in range(WIDTH - SCAN_XPARKEDIN):
-        if blue_mask[0, i] == 255:
-          blue = i + SCAN_XPARKEDIN
-          break
-      if blue_count > PARKEDIN_THRESH and right < WIDTH/4:
-        if np.abs(blue - PARKED_FOLLOW) > TURN_THRESH:
-          self.send_vel(0, 1 if PARKED_FOLLOW - blue > 0 else -1)
-        else:
-          self.send_vel(1, 0)
-      elif right > WIDTH/4:
-        self.wait += 1
-        if self.wait > INNER_SWITCH_WAIT_FRAMES:
-          self.wait = 0
-          print('inner straight white')
-          self.follow_state = INNER_STRAIGHT_WHITE
-      else:
-        self.send_vel(1, 0)
+    elif self.follow_state == WAIT_FOR_TRUCK:
+      if self.truck_wait > TRUCK_WAIT_FRAMES:
+        self.truck_wait = 0
+        print('returning to state', self.truck_prev_state)
+        self.follow_state = self.truck_prev_state
+        self.truck_prev_state = -1
+      self.truck_wait += 1
     elif self.follow_state == STOP:
       self.send_vel(0, 0)
       self.follow_state += 1
+
+    if self.follow_state >= INNER_TURN and self.follow_state < WAIT_FOR_TRUCK:
+      truck_mask = cv2.inRange(frame, *TRUCK_MASK1)
+      truck_mask += cv2.inRange(frame, *TRUCK_MASK2)
+      truck_mask = cv2.blur(truck_mask, (3, 3))
+      _, contours, _ = cv2.findContours(truck_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+      max_area = 0
+      for c in contours:
+        con = cv2.approxPolyDP(c, 3, True)
+        area = cv2.contourArea(con)
+        if area > max_area:
+          max_area = area
+      if max_area > TRUCK_AREA_THRESH:
+        print('waiting for truck')
+        self.truck_prev_state = self.follow_state
+        self.follow_state = WAIT_FOR_TRUCK
+        self.send_vel(0, 0)
+
+    cv2.circle(image_raw, (int(right), SCAN_YFOLLOW), 20, (0, 0, 255), 2)
+    cv2.circle(image_raw, (int(left), SCAN_YFOLLOW), 20, (255, 0, 0), 2)
+    cv2.imshow('cam', image_raw)
+    cv2.waitKey(1)
 
     if self.prevx != -1:
       print(self.prevy, self.prevx, frame[self.prevy, self.prevx])
