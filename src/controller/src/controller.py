@@ -263,11 +263,6 @@ class controller:
         self.follow_state = WAIT_FOR_TRUCK
         self.send_vel(0, 0)
 
-    cv2.circle(image_raw, (int(right), SCAN_YFOLLOW), 20, (0, 0, 255), 2)
-    cv2.circle(image_raw, (int(left), SCAN_YFOLLOW), 20, (255, 0, 0), 2)
-    cv2.imshow('cam', image_raw)
-    cv2.waitKey(1)
-
     if self.prevx != -1:
       print(self.prevy, self.prevx, frame[self.prevy, self.prevx])
       self.prevx = -1
