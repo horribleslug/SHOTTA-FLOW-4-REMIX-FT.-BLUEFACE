@@ -11,14 +11,16 @@ import os
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge, CvBridgeError
+import keras
+from keras import models
 
 #seen = False
 n_white_pix = 0
 #staticframe = np.zeros((360, 640))
-
+LETTER_WIDTH_THRESH = 60
+LETTER_HEIGHT_THRESH = 60
 
 class image_converter:
-  
 
   def __init__(self):
     self.bridge = CvBridge()
@@ -26,6 +28,8 @@ class image_converter:
     self.seen = False
     self.PATH = os.path.dirname(os.path.realpath(__file__)) + "/runpics/"
     self.count = 0
+    self.model = models.load_model('bigbrain.h5')
+    self.model._make_predict_function()
 
   def callback(self,data):
     try:
@@ -38,8 +42,6 @@ class image_converter:
     #cv_image = cv2.resize(cv_image, None, fx=0.5, fy=0.5)
     hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
 
-    # define range of white color in HSV
-    # change it according to your need !
     plate_lower = np.array([0,0,90], dtype=np.uint8)
     plate_upper = np.array([0,0,210], dtype=np.uint8)
     platemask = cv2.inRange(hsv, plate_lower, plate_upper)
@@ -76,7 +78,11 @@ class image_converter:
     
     cv2.waitKey(10)
 
+  def to_letter(ind):
+    return chr(ind + 48) if ind < 10 else chr(ind + 55)
+
   def platefinder(self, rawpic, maskpic):
+    
     img = maskpic.copy()
     rawimg = rawpic.copy()
     
@@ -143,7 +149,7 @@ class image_converter:
                 toprights[j] = pt
 
     # draw tha FUCKIN CIRCLES
-
+    '''
     for i in toprights:
         img = cv2.circle(img, (i[0], i[1]), 3, (0, 0, 255), 3)
 
@@ -155,7 +161,7 @@ class image_converter:
 
     for i in toplefts:
         img = cv2.circle(img, (i[0], i[1]), 3, (0, 0, 255), 3)
-
+    '''
     # perspective transform
     dst = np.array([
       [0, 0],
@@ -177,10 +183,64 @@ class image_converter:
 
     plate = cv2.warpPerspective(rawimg,M,(600,298))
     top = cv2.warpPerspective(rawimg, N, (300, 300))
-
+    '''
     cv2.imshow("Image", img)
     cv2.imshow("Spot Number", top)
     cv2.imshow("License Plate", plate)
+    '''
+    # filter characters
+
+    lower_blue = np.array([100,100,30])
+    upper_blue = np.array([140,255,255])
+
+    platehsv = cv2.cvtColor(plate, cv2.COLOR_BGR2HSV)
+    platehsv = cv2.inRange(platehsv, lower_blue, upper_blue)
+  
+    cv2.imshow("fuck", platehsv)
+    
+    #find contours, boxes
+    _, morecnts, _ = cv2.findContours(platehsv, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    boundRect = [None]*len(morecnts)
+    contours_poly = [None]*len(morecnts)
+    for i, c in enumerate(morecnts):
+      contours_poly[i] = cv2.approxPolyDP(c, 3, True)
+      boundRect[i] = cv2.boundingRect(contours_poly[i])
+    
+    np.sort(boundRect, axis=0)
+    
+    chars = []
+
+    for i, c in enumerate(boundRect):
+      if (300 > c[0] and 300 < c[0] + c[2]) or c[3] < LETTER_HEIGHT_THRESH:
+        pass
+      elif c[2] > LETTER_WIDTH_THRESH and c[2] < 2 * LETTER_WIDTH_THRESH:
+        chars.append(cv2.resize(platehsv[c[1]:c[1]+c[3], c[0]:c[0]+c[2]], (106, 160)))
+      elif c[2] >= 2 * LETTER_WIDTH_THRESH:
+        chars.append(cv2.resize(platehsv[c[1]:c[1]+c[3], c[0]:c[0]+int(c[2]/2.0)], (106, 160)))
+        chars.append(cv2.resize(platehsv[c[1]:c[1]+c[3], c[0]+int(c[2]/2.0):c[0]+c[2]], (106, 160)))
+    
+    #chars = np.array(chars)[np.newaxis,:,:,:]
+    '''
+    charshsv = []
+    for c in chars:
+      charshsv.append(cv2.cvtColor(c, cv2.COLOR_BGR2HSV))
+    '''
+    pred_plate = ""
+    self.model.summary()
+
+    for c in chars:
+      #cc = cv2.cvtColor(c, cv2.COLOR_GRAY2RGB) 
+      cc = c[:, :, np.newaxis]
+      cc = cc[np.newaxis, :, :, :]
+      print(cc.shape)
+      predicted = self.model.predict(cc)
+      #cv2.imshow("char", c)
+      print(c.shape)
+      pred_plate += self.to_letter(np.argmax(predicted[0]))
+    
+    print(pred_plate)
+    
+
 
 def main(args):
   ic = image_converter()
