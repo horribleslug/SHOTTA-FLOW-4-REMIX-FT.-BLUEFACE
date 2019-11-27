@@ -123,7 +123,7 @@ class controller:
       self.wait = 0
       self.prev_ped = 0
       self.prev_parked = 0
-      self.parked_count = 4
+      self.parked_count = 0
       self.truck_wait = 0
       self.truck_prev_state = -1
       self.send_vel(1, 0)

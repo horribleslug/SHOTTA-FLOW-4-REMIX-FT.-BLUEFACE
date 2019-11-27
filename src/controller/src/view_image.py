@@ -68,7 +68,7 @@ class image_converter:
     #res = cv2.bitwise_and(cv_image,cv_image, mask= mask1)
 
     # cv2.imshow("Robot Camera", cv_image)
-    cv2.imshow("mask", cv2.resize(platemask, None, fx=0.5, fy=0.5))
+    # cv2.imshow("mask", cv2.resize(platemask, None, fx=0.5, fy=0.5))
     #cv2.imshow("res", res)
 
     # SUM THA WHITE PIXELS IN MASK
