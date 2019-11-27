@@ -41,8 +41,6 @@ for i in range(1, 9):
     for c in boundRect:
         if c[3] > SIZE_THRESH and c[3] < 300:
             park_mask = cv2.resize(park_mask[c[1]:c[1]+c[3], c[0]:c[0]+c[2]], (106, 160))
-            cv2.imshow('can', park_mask)
-            cv2.waitKey(0)
             break
 
     cv2.imwrite(path + '/numbers/' + s + '_' + number, park_mask)
