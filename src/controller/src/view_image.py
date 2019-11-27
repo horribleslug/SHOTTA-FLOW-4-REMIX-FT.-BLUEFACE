@@ -21,6 +21,9 @@ NUM_WIDTH_THRESH = 30
 NUM_HEIGHT_THRESH = 30
 BLUE_MASK = [np.array([100,100,30]), np.array([140,255,255])]
 NUM_MASK = [np.array([0,0,0]), np.array([0,0,30])]
+PLATE_MASK1 = [np.array([0,0,118]), np.array([0,0,126])]
+PLATE_MASK2 = [np.array([0,0,98]), np.array([0,0,106])]
+PLATE_MASK3 = [np.array([0,0,198]), np.array([0,0,206])]
 INPUT_SHAPE = (106, 160)
 TEAM_ID = "Team9,UHOH"
 
@@ -53,9 +56,9 @@ class image_converter:
     #cv_image = cv2.resize(cv_image, None, fx=0.5, fy=0.5)
     hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
 
-    plate_lower = np.array([0,0,90], dtype=np.uint8)
-    plate_upper = np.array([0,0,210], dtype=np.uint8)
-    platemask = cv2.inRange(hsv, plate_lower, plate_upper)
+    platemask = cv2.inRange(hsv, *PLATE_MASK1)
+    platemask += cv2.inRange(hsv, *PLATE_MASK2)
+    platemask += cv2.inRange(hsv, *PLATE_MASK3)
     #platemask = cv2.blur(platemask, (3, 3))
 
     #road_lower = np.array([0,0,130], dtype=np.uint8)
@@ -65,15 +68,13 @@ class image_converter:
     #res = cv2.bitwise_and(cv_image,cv_image, mask= mask1)
 
     # cv2.imshow("Robot Camera", cv_image)
-    # cv2.imshow("mask", platemask)
+    cv2.imshow("mask", cv2.resize(platemask, None, fx=0.5, fy=0.5))
     #cv2.imshow("res", res)
 
     # SUM THA WHITE PIXELS IN MASK
     n_white_pix = np.sum(platemask==255)
     
-    #print(str(n_white_pix))
-
-    if n_white_pix > 23000 and self.seen is False:
+    if n_white_pix > 20000 and self.seen is False:
       self.seen = True
       #cv2.imwrite(os.path.join(self.PATH, "run_{}.png".format(self.count)), cv_image)
       #cv2.imwrite(os.path.join(self.PATH, "mask_{}.png".format(self.count)), platemask)
@@ -83,7 +84,7 @@ class image_converter:
 
       #SEND TO CORNER FINDER
 
-    elif n_white_pix < 12000 and self.seen is True:
+    elif n_white_pix < 17000 and self.seen is True:
       self.seen = False
       print("not seen :~(")
     
