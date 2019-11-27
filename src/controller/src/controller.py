@@ -54,7 +54,7 @@ PARKED_WAIT_FRAMES = 14
 INNER_TURN_WAIT_FRAMES = 12
 PED_WAIT_FRAMES = 15
 TRUCK_WAIT_FRAMES = 50
-TRUCK_AREA_THRESH = 20000
+TRUCK_AREA_THRESH = 18000
 
 WHITE_MASK = [np.array([0,0,100]), np.array([255,0,255])]
 BLUE_MASK = [np.array([110,120,95]), np.array([130,255,210])]
@@ -255,10 +255,10 @@ class controller:
         self.follow_state = WAIT_FOR_TRUCK
         self.send_vel(0, 0)
 
-    cv2.circle(image_raw, (int(right), SCAN_YFOLLOW_INNER if self.follow_state >= INNER_TURN else SCAN_YFOLLOW), 20, (0, 0, 255), 2)
-    cv2.circle(image_raw, (int(left), SCAN_YFOLLOW_INNER if self.follow_state >= INNER_TURN else SCAN_YFOLLOW), 20, (255, 0, 0), 2)
-    cv2.imshow('cam', image_raw)
-    cv2.waitKey(1)
+    # cv2.circle(image_raw, (int(right), SCAN_YFOLLOW_INNER if self.follow_state >= INNER_TURN else SCAN_YFOLLOW), 20, (0, 0, 255), 2)
+    # cv2.circle(image_raw, (int(left), SCAN_YFOLLOW_INNER if self.follow_state >= INNER_TURN else SCAN_YFOLLOW), 20, (255, 0, 0), 2)
+    # cv2.imshow('cam', image_raw)
+    # cv2.waitKey(1)
 
     if self.prevx != -1:
       print(self.prevy, self.prevx, frame[self.prevy, self.prevx])
