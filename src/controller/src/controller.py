@@ -33,20 +33,21 @@ INNER_STRAIGHT = 10
 WAIT_FOR_TRUCK = 11
 STOP = 100
 
+SCAN_YFOLLOW_INNER = 695
 SCAN_YFOLLOW = 580
 SCAN_YZEBRA = [710, 715, 718]
 SCAN_XZEBRA = [200, 1080]
 SCAN_YPED = [435, 455, 475, 495]
 SCAN_XPED = [490, 890]
+SCAN_YPARKED_INNER = 580
 SCAN_YPARKED = 516
 SCAN_XPARKED = 100
-RIGHT_FOLLOW_BLUE = 1020
+RIGHT_FOLLOW_INNER = 1000
 RIGHT_FOLLOW = 960
 LEFT_FOLLOW = 300
 TURN_THRESH = 40
 ZEBRA_THRESH = 250000
 PED_THRESH = 4000
-PARKEDIN_THRESH = 20000
 PARKED_THRESH = 10000
 PARKED_COUNT_END = 6
 PARKED_WAIT_FRAMES = 14
@@ -111,10 +112,10 @@ class controller:
           right = (i + right)/2
           break
     else:
-      line_mask = cv2.inRange(frame[SCAN_YFOLLOW,WIDTH/2+50:WIDTH][np.newaxis,:], *WHITE_MASK)
-      line_mask += cv2.inRange(frame[SCAN_YFOLLOW,WIDTH/2+50:WIDTH][np.newaxis,:], *BLUE_MASK)
-      for i in range(0, WIDTH/2-50-1):
-        if line_mask[0, i] == 255 and line_mask[0, i + 1] == 255:
+      line_mask = cv2.inRange(frame[SCAN_YFOLLOW_INNER,WIDTH/2+50:WIDTH][np.newaxis,:], *WHITE_MASK)
+      buffer = 3
+      for i in range(0, WIDTH/2-50-buffer):
+        if np.sum(line_mask[0, i:i+buffer]) == 255 * buffer:
           right = i + WIDTH/2+50
           break
 
@@ -216,16 +217,16 @@ class controller:
       else:
         self.send_vel(1, 0)
     elif self.follow_state == INNER_STRAIGHT:
+      blue_count = np.sum(cv2.inRange(frame[SCAN_YPARKED_INNER,WIDTH/2:WIDTH][np.newaxis,:], *BLUE_MASK))
       if right > WIDTH/4:
-        mask = cv2.inRange(frame[SCAN_YFOLLOW, right][np.newaxis,np.newaxis,:], *BLUE_MASK)
-        xdest = RIGHT_FOLLOW_BLUE if mask[0, 0] == 255 else RIGHT_FOLLOW
-        xdest += 15
-        if np.abs(right - xdest) > TURN_THRESH:
-          self.send_vel(0, 1 if xdest - right > 0 else -1)
+        if np.abs(right - RIGHT_FOLLOW_INNER) > TURN_THRESH:
+          self.send_vel(0, 1 if RIGHT_FOLLOW_INNER - right > 0 else -1)
         else:
           self.send_vel(1, 0)
-      else:
+      elif blue_count >= PARKED_THRESH:
         self.send_vel(1, 0)
+      else:
+        self.send_vel(0, -1)
     elif self.follow_state == WAIT_FOR_TRUCK:
       if self.truck_wait > TRUCK_WAIT_FRAMES:
         self.truck_wait = 0
@@ -254,6 +255,8 @@ class controller:
         self.follow_state = WAIT_FOR_TRUCK
         self.send_vel(0, 0)
 
+    cv2.circle(image_raw, (int(right), SCAN_YFOLLOW_INNER if self.follow_state >= INNER_TURN else SCAN_YFOLLOW), 20, (0, 0, 255), 2)
+    cv2.circle(image_raw, (int(left), SCAN_YFOLLOW_INNER if self.follow_state >= INNER_TURN else SCAN_YFOLLOW), 20, (255, 0, 0), 2)
     cv2.imshow('cam', image_raw)
     cv2.waitKey(1)
 

@@ -256,7 +256,7 @@ class image_converter:
         pred_plate += self.to_letter(np.argmax(predicted[0]))
       pred = model.predict(num[:, :, np.newaxis][np.newaxis, :, :, :])
       pred_num = self.to_letter(np.argmax(pred))
-
+    print(pred_num, pred_plate)
     self.send_plate(pred_num, pred_plate)
 
 
