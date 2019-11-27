@@ -56,9 +56,7 @@ class image_converter:
     #cv_image = cv2.resize(cv_image, None, fx=0.5, fy=0.5)
     hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
 
-    platemask = cv2.inRange(hsv, *PLATE_MASK1)
-    platemask += cv2.inRange(hsv, *PLATE_MASK2)
-    platemask += cv2.inRange(hsv, *PLATE_MASK3)
+    platemask = cv2.inRange(hsv, *PLATE_MASK1) | cv2.inRange(hsv, *PLATE_MASK2) | cv2.inRange(hsv, *PLATE_MASK3)
     #platemask = cv2.blur(platemask, (3, 3))
 
     #road_lower = np.array([0,0,130], dtype=np.uint8)

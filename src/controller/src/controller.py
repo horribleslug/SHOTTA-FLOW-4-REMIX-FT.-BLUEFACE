@@ -239,8 +239,7 @@ class controller:
       self.follow_state += 1
 
     if self.follow_state >= INNER_TURN and self.follow_state < WAIT_FOR_TRUCK:
-      truck_mask = cv2.inRange(frame, *TRUCK_MASK1)
-      truck_mask += cv2.inRange(frame, *TRUCK_MASK2)
+      truck_mask = cv2.inRange(frame, *TRUCK_MASK1) | cv2.inRange(frame, *TRUCK_MASK2)
       truck_mask = cv2.blur(truck_mask, (3, 3))
       _, contours, _ = cv2.findContours(truck_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
       max_area = 0
