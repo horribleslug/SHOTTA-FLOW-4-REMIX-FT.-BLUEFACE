@@ -9,7 +9,6 @@ import rospy
 import cv2
 import numpy as np
 from numpy.linalg import inv
-from std_msgs.msg import String
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge, CvBridgeError
@@ -44,7 +43,7 @@ SCAN_XPARKED = 100
 RIGHT_FOLLOW_BLUE = 1020
 RIGHT_FOLLOW = 960
 LEFT_FOLLOW = 300
-TURN_THRESH = 50
+TURN_THRESH = 40
 ZEBRA_THRESH = 250000
 PED_THRESH = 4000
 PARKEDIN_THRESH = 20000

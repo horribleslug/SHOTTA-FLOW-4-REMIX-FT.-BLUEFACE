@@ -9,17 +9,22 @@ import cv2
 import numpy as np
 import os
 from sensor_msgs.msg import Image
-from geometry_msgs.msg import Twist
+from std_msgs.msg import String
 from cv_bridge import CvBridge, CvBridgeError
 import tensorflow as tf
 from tensorflow.python.keras.backend import set_session
 from tensorflow.python.keras.models import load_model
 
-#seen = False
-n_white_pix = 0
-#staticframe = np.zeros((360, 640))
 LETTER_WIDTH_THRESH = 60
 LETTER_HEIGHT_THRESH = 60
+NUM_WIDTH_THRESH = 30
+NUM_HEIGHT_THRESH = 30
+BLUE_MASK = [np.array([100,100,30]), np.array([140,255,255])]
+NUM_MASK = [np.array([0,0,0]), np.array([0,0,30])]
+INPUT_SHAPE = (106, 160)
+TEAM_ID = "Team9,UHOH"
+
+n_white_pix = 0
 
 sess = tf.Session()
 graph = tf.get_default_graph()
@@ -32,6 +37,7 @@ class image_converter:
   def __init__(self):
     self.bridge = CvBridge()
     self.image_sub = rospy.Subscriber("/R1/pi_camera/image_raw", Image, self.callback)
+    self.plate_pub = rospy.Publisher("/license_plate", String, queue_size=30)
     self.seen = False
     self.PATH = os.path.dirname(os.path.realpath(__file__)) + "/runpics/"
     self.count = 0
@@ -86,6 +92,11 @@ class image_converter:
   def to_letter(self, ind):
     return chr(ind + 48) if ind < 10 else chr(ind + 55)
 
+  def send_plate(self, num, plate):
+    msg = String()
+    msg.data = TEAM_ID + "," + num + "," + plate
+    self.plate_pub.publish(msg)
+
   def platefinder(self, rawpic, maskpic):
     global model
     global graph
@@ -94,7 +105,6 @@ class image_converter:
     rawimg = rawpic.copy()
     
     #img = img[:,:,np.newaxis, np.newaxis]
-    print(str(img.shape))
 
     #gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
@@ -191,19 +201,16 @@ class image_converter:
     top = cv2.warpPerspective(rawimg, N, (300, 300))
     '''
     cv2.imshow("Image", img)
-    cv2.imshow("Spot Number", top)
     cv2.imshow("License Plate", plate)
     '''
     # filter characters
 
-    lower_blue = np.array([100,100,30])
-    upper_blue = np.array([140,255,255])
-
     platehsv = cv2.cvtColor(plate, cv2.COLOR_BGR2HSV)
-    platehsv = cv2.inRange(platehsv, lower_blue, upper_blue)
+    platehsv = cv2.inRange(platehsv, *BLUE_MASK)
   
-    cv2.imshow("fuck", platehsv)
-    
+    tophsv = cv2.cvtColor(top, cv2.COLOR_BGR2HSV)
+    tophsv = cv2.inRange(tophsv, *NUM_MASK)
+
     #find contours, boxes
     _, morecnts, _ = cv2.findContours(platehsv, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     boundRect = [None]*len(morecnts)
@@ -212,29 +219,53 @@ class image_converter:
       contours_poly[i] = cv2.approxPolyDP(c, 3, True)
       boundRect[i] = cv2.boundingRect(contours_poly[i])
     boundRect = sorted(boundRect, key=lambda x: x[0])
-    
+
+    _, morecnts, _ = cv2.findContours(tophsv, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    boundRectTop = []
+    for c in morecnts:
+      poly = cv2.approxPolyDP(c, 3, True)
+      boundRectTop.append(cv2.boundingRect(poly))
+    boundRectTop = sorted(boundRectTop, key=lambda x: x[0], reverse=True)
+
+    num = None
+    for c in boundRectTop:
+      if c[3] > NUM_HEIGHT_THRESH and c[2] > NUM_WIDTH_THRESH:
+        num = cv2.resize(tophsv[c[1]:c[1]+c[3], c[0]:c[0]+c[2]], INPUT_SHAPE)
+        break
+
+    cv2.imshow("fuck", platehsv)
+    if num is not None:
+      cv2.imshow("Spot Number", num)
+
     chars = []
     for i, c in enumerate(boundRect):
       if (300 > c[0] and 300 < c[0] + c[2]) or c[3] < LETTER_HEIGHT_THRESH:
         pass
       elif c[2] > LETTER_WIDTH_THRESH and c[2] < 2 * LETTER_WIDTH_THRESH:
-        chars.append(cv2.resize(platehsv[c[1]:c[1]+c[3], c[0]:c[0]+c[2]], (106, 160)))
+        chars.append(cv2.resize(platehsv[c[1]:c[1]+c[3], c[0]:c[0]+c[2]], INPUT_SHAPE))
       elif c[2] >= 2 * LETTER_WIDTH_THRESH:
-        chars.append(cv2.resize(platehsv[c[1]:c[1]+c[3], c[0]:c[0]+int(c[2]/2.0)], (106, 160)))
-        chars.append(cv2.resize(platehsv[c[1]:c[1]+c[3], c[0]+int(c[2]/2.0):c[0]+c[2]], (106, 160)))
+        chars.append(cv2.resize(platehsv[c[1]:c[1]+c[3], c[0]:c[0]+int(c[2]/2.0)], INPUT_SHAPE))
+        chars.append(cv2.resize(platehsv[c[1]:c[1]+c[3], c[0]+int(c[2]/2.0):c[0]+c[2]], INPUT_SHAPE))
     
     pred_plate = ""
+    pred_num = ""
     with graph.as_default():
       set_session(sess)
       for c in chars:
         predicted = model.predict(c[:, :, np.newaxis][np.newaxis, :, :, :])
         pred_plate += self.to_letter(np.argmax(predicted[0]))
-    print(pred_plate)
+      pred = model.predict(num[:, :, np.newaxis][np.newaxis, :, :, :])
+      pred_num = self.to_letter(np.argmax(pred))
+
+    self.send_plate(pred_num, pred_plate)
+
 
 def main(args):
   ic = image_converter()
   rospy.init_node('image_converter', anonymous=True)
   try:
+    # Needed to start score tracker
+    ic.send_plate('0', '0')
     rospy.spin()
   except KeyboardInterrupt:
     print("Shutting down")
