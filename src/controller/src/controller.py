@@ -113,25 +113,16 @@ class controller:
     else:
       line_mask = cv2.inRange(frame[SCAN_YFOLLOW,WIDTH/2+50:WIDTH][np.newaxis,:], *WHITE_MASK)
       line_mask += cv2.inRange(frame[SCAN_YFOLLOW,WIDTH/2+50:WIDTH][np.newaxis,:], *BLUE_MASK)
-      for i in range(0, WIDTH/2-50):
-        if line_mask[0, i] == 255:
+      for i in range(0, WIDTH/2-50-1):
+        if line_mask[0, i] == 255 and line_mask[0, i + 1] == 255:
           right = i + WIDTH/2+50
           break
-      right2 = -1
-      line_mask = cv2.inRange(frame[SCAN_YFOLLOW+50,WIDTH/2+50:WIDTH][np.newaxis,:], *WHITE_MASK)
-      line_mask += cv2.inRange(frame[SCAN_YFOLLOW+50,WIDTH/2+50:WIDTH][np.newaxis,:], *BLUE_MASK)
-      for i in range(0, WIDTH/2-50):
-        if line_mask[0, i] == 255:
-          right2 = i + WIDTH/2+50
-          break
-      if right2 < right and right2 != -1:
-        right = right2
 
     if self.follow_state == INIT:
       self.wait = 0
       self.prev_ped = 0
       self.prev_parked = 0
-      self.parked_count = 0
+      self.parked_count = 4
       self.truck_wait = 0
       self.truck_prev_state = -1
       self.send_vel(1, 0)
@@ -228,6 +219,7 @@ class controller:
       if right > WIDTH/4:
         mask = cv2.inRange(frame[SCAN_YFOLLOW, right][np.newaxis,np.newaxis,:], *BLUE_MASK)
         xdest = RIGHT_FOLLOW_BLUE if mask[0, 0] == 255 else RIGHT_FOLLOW
+        xdest += 15
         if np.abs(right - xdest) > TURN_THRESH:
           self.send_vel(0, 1 if xdest - right > 0 else -1)
         else:
@@ -261,6 +253,9 @@ class controller:
         self.truck_prev_state = self.follow_state
         self.follow_state = WAIT_FOR_TRUCK
         self.send_vel(0, 0)
+
+    cv2.imshow('cam', image_raw)
+    cv2.waitKey(1)
 
     if self.prevx != -1:
       print(self.prevy, self.prevx, frame[self.prevy, self.prevx])
