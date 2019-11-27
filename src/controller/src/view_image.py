@@ -11,14 +11,21 @@ import os
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge, CvBridgeError
-import keras
-from keras import models
+import tensorflow as tf
+from tensorflow.python.keras.backend import set_session
+from tensorflow.python.keras.models import load_model
 
 #seen = False
 n_white_pix = 0
 #staticframe = np.zeros((360, 640))
 LETTER_WIDTH_THRESH = 60
 LETTER_HEIGHT_THRESH = 60
+
+sess = tf.Session()
+graph = tf.get_default_graph()
+set_session(sess)
+model = load_model('bigbrain.h5')
+model._make_predict_function()
 
 class image_converter:
 
@@ -28,8 +35,6 @@ class image_converter:
     self.seen = False
     self.PATH = os.path.dirname(os.path.realpath(__file__)) + "/runpics/"
     self.count = 0
-    self.model = models.load_model('bigbrain.h5')
-    self.model._make_predict_function()
 
   def callback(self,data):
     try:
@@ -53,8 +58,8 @@ class image_converter:
 
     #res = cv2.bitwise_and(cv_image,cv_image, mask= mask1)
 
-    cv2.imshow("Robot Camera", cv_image)
-    cv2.imshow("mask", platemask)
+    # cv2.imshow("Robot Camera", cv_image)
+    # cv2.imshow("mask", platemask)
     #cv2.imshow("res", res)
 
     # SUM THA WHITE PIXELS IN MASK
@@ -78,11 +83,13 @@ class image_converter:
     
     cv2.waitKey(10)
 
-  def to_letter(ind):
+  def to_letter(self, ind):
     return chr(ind + 48) if ind < 10 else chr(ind + 55)
 
   def platefinder(self, rawpic, maskpic):
-    
+    global model
+    global graph
+    global sess
     img = maskpic.copy()
     rawimg = rawpic.copy()
     
@@ -139,7 +146,6 @@ class image_converter:
         for pt in conts[j]:
             newpt = pt.copy()
             newpt[0][0] = 1280-newpt[0][0]
-            print(str(newpt))
             currnorm = np.linalg.norm(newpt)
             if(currnorm > maxrightnorm):
                 maxrightnorm = currnorm
@@ -205,11 +211,9 @@ class image_converter:
     for i, c in enumerate(morecnts):
       contours_poly[i] = cv2.approxPolyDP(c, 3, True)
       boundRect[i] = cv2.boundingRect(contours_poly[i])
-    
-    np.sort(boundRect, axis=0)
+    boundRect = sorted(boundRect, key=lambda x: x[0])
     
     chars = []
-
     for i, c in enumerate(boundRect):
       if (300 > c[0] and 300 < c[0] + c[2]) or c[3] < LETTER_HEIGHT_THRESH:
         pass
@@ -219,28 +223,13 @@ class image_converter:
         chars.append(cv2.resize(platehsv[c[1]:c[1]+c[3], c[0]:c[0]+int(c[2]/2.0)], (106, 160)))
         chars.append(cv2.resize(platehsv[c[1]:c[1]+c[3], c[0]+int(c[2]/2.0):c[0]+c[2]], (106, 160)))
     
-    #chars = np.array(chars)[np.newaxis,:,:,:]
-    '''
-    charshsv = []
-    for c in chars:
-      charshsv.append(cv2.cvtColor(c, cv2.COLOR_BGR2HSV))
-    '''
     pred_plate = ""
-    self.model.summary()
-
-    for c in chars:
-      #cc = cv2.cvtColor(c, cv2.COLOR_GRAY2RGB) 
-      cc = c[:, :, np.newaxis]
-      cc = cc[np.newaxis, :, :, :]
-      print(cc.shape)
-      predicted = self.model.predict(cc)
-      #cv2.imshow("char", c)
-      print(c.shape)
-      pred_plate += self.to_letter(np.argmax(predicted[0]))
-    
+    with graph.as_default():
+      set_session(sess)
+      for c in chars:
+        predicted = model.predict(c[:, :, np.newaxis][np.newaxis, :, :, :])
+        pred_plate += self.to_letter(np.argmax(predicted[0]))
     print(pred_plate)
-    
-
 
 def main(args):
   ic = image_converter()
@@ -252,4 +241,4 @@ def main(args):
   cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    main(sys.argv)
+  main(sys.argv)
