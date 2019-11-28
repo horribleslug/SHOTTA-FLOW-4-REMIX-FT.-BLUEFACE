@@ -87,7 +87,7 @@ class image_converter:
 
       #SEND TO CORNER FINDER
 
-    elif n_white_pix < 12000 and self.seen is True:
+    elif n_white_pix < 14000 and self.seen is True:
       self.seen = False
       print("not seen :~(")
     
@@ -97,9 +97,10 @@ class image_converter:
     return chr(ind + 48) if ind < 10 else chr(ind + 55)
   '''
   def send_plate(self, num, plate):
-    msg = String()
-    msg.data = TEAM_ID + "," + num + "," + plate
-    self.plate_pub.publish(msg)
+    if len(plate) == 4:
+      msg = String()
+      msg.data = TEAM_ID + "," + num + "," + plate
+      self.plate_pub.publish(msg)
 
   def platefinder(self, rawpic, maskpic):
     global modelL
@@ -239,7 +240,7 @@ class image_converter:
         num = cv2.resize(tophsv[c[1]:c[1]+c[3], c[0]:c[0]+c[2]], INPUT_SHAPE)
         break
 
-    cv2.imshow("fuck", platehsv)
+    cv2.imshow("License Mask", platehsv)
     if num is not None:
       cv2.imshow("Spot Number", num)
 
