@@ -25,15 +25,19 @@ PLATE_MASK1 = [np.array([0,0,118]), np.array([0,0,126])]
 PLATE_MASK2 = [np.array([0,0,98]), np.array([0,0,106])]
 PLATE_MASK3 = [np.array([0,0,198]), np.array([0,0,206])]
 INPUT_SHAPE = (106, 160)
-TEAM_ID = "Team9,UHOH"
+TEAM_ID = "Team9,uhoh"
 
 n_white_pix = 0
 
 sess = tf.Session()
 graph = tf.get_default_graph()
 set_session(sess)
-model = load_model('bigbrain.h5')
-model._make_predict_function()
+modelL = load_model('BLUEFACE.h5')
+modelL._make_predict_function()
+modelN = load_model('NLECHOPPA.h5')
+modelN._make_predict_function()
+modelS = load_model('SHOTTAFLOW.h5')
+modelS._make_predict_function()
 
 class image_converter:
 
@@ -71,8 +75,9 @@ class image_converter:
 
     # SUM THA WHITE PIXELS IN MASK
     n_white_pix = np.sum(platemask==255)
+    #print(str(n_white_pix))
     
-    if n_white_pix > 20000 and self.seen is False:
+    if n_white_pix > 17000 and self.seen is False:
       self.seen = True
       #cv2.imwrite(os.path.join(self.PATH, "run_{}.png".format(self.count)), cv_image)
       #cv2.imwrite(os.path.join(self.PATH, "mask_{}.png".format(self.count)), platemask)
@@ -82,22 +87,24 @@ class image_converter:
 
       #SEND TO CORNER FINDER
 
-    elif n_white_pix < 17000 and self.seen is True:
+    elif n_white_pix < 12000 and self.seen is True:
       self.seen = False
       print("not seen :~(")
     
     cv2.waitKey(10)
-
+  '''
   def to_letter(self, ind):
     return chr(ind + 48) if ind < 10 else chr(ind + 55)
-
+  '''
   def send_plate(self, num, plate):
     msg = String()
     msg.data = TEAM_ID + "," + num + "," + plate
     self.plate_pub.publish(msg)
 
   def platefinder(self, rawpic, maskpic):
-    global model
+    global modelL
+    global modelN
+    global modelS
     global graph
     global sess
     img = maskpic.copy()
@@ -250,11 +257,15 @@ class image_converter:
     pred_num = ""
     with graph.as_default():
       set_session(sess)
-      for c in chars:
-        predicted = model.predict(c[:, :, np.newaxis][np.newaxis, :, :, :])
-        pred_plate += self.to_letter(np.argmax(predicted[0]))
-      pred = model.predict(num[:, :, np.newaxis][np.newaxis, :, :, :])
-      pred_num = self.to_letter(np.argmax(pred))
+      for i, c in enumerate(chars):
+        if i < 2:
+          predicted = modelL.predict(c[:, :, np.newaxis][np.newaxis, :, :, :])
+          pred_plate += chr(np.argmax(predicted[0]) + 65)
+        else:
+          predicted = modelN.predict(c[:, :, np.newaxis][np.newaxis, :, :, :])
+          pred_plate += chr(np.argmax(predicted[0]) + 48)
+      pred = modelS.predict(num[:, :, np.newaxis][np.newaxis, :, :, :])
+      pred_num = chr(np.argmax(pred) + 48)
     print(pred_num, pred_plate)
     self.send_plate(pred_num, pred_plate)
 
