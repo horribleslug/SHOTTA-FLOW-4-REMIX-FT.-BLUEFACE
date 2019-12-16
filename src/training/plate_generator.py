@@ -58,42 +58,43 @@ for i in range(0, CLEAN):
                 blank_plate)
 '''
 #'''
-for i in range(0, BLUR):
-    # Pick two random letters
-    plate_alpha = ""
-    for _ in range(0, 2):
-        plate_alpha += (random.choice(string.ascii_uppercase))
+for n in range(0, 10):
+    for i in range(0, 10):
+        for j in range(0, 10):
+            # Pick two random letters
+            plate_alpha = ""
+            plate_alpha += chr(i + 48)
+            plate_alpha += chr(j + 48)
+            # Pick two random numbers
+            
+            plate_num = plate_alpha
 
-    # Pick two random numbers
-    num = randint(0, 99)
-    plate_num = "{:02d}".format(num)
+            # Write plate to image
+            blank_plate = cv2.imread(path+'blank_plate.png')
 
-    # Write plate to image
-    blank_plate = cv2.imread(path+'blank_plate.png')
+            # Convert into a PIL image (this is so we can use the monospaced fonts)
+            blank_plate_pil = Image.fromarray(blank_plate)
 
-    # Convert into a PIL image (this is so we can use the monospaced fonts)
-    blank_plate_pil = Image.fromarray(blank_plate)
+            # Get a drawing context
+            draw = ImageDraw.Draw(blank_plate_pil)
+            monospace = ImageFont.truetype("/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf", 200)
+            draw.text((48, 50),plate_alpha + " " + plate_num, (255,0,0), font=monospace)
 
-    # Get a drawing context
-    draw = ImageDraw.Draw(blank_plate_pil)
-    monospace = ImageFont.truetype("/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf", 200)
-    draw.text((48, 50),plate_alpha + " " + plate_num, (255,0,0), font=monospace)
+            # Convert back to OpenCV image and save
+            blank_plate = np.array(blank_plate_pil)
 
-    # Convert back to OpenCV image and save
-    blank_plate = np.array(blank_plate_pil)
+            # Darken
+            gamma = 4.0/randint(8, 16)
+            blank_plate = adjust_gamma(blank_plate, gamma)
 
-    # Darken
-    gamma = 4.0/randint(8, 16)
-    blank_plate = adjust_gamma(blank_plate, gamma)
+            # Apply Blur
+            kernsize = randint(12, 25)
+            #blank_plate = cv2.blur(blank_plate,(kernsize,kernsize))
+            kernel = np.ones((kernsize,kernsize),np.float32)/(kernsize**2)
+            blank_plate = cv2.filter2D(blank_plate,-1,kernel)
 
-    # Apply Blur
-    kernsize = randint(12, 25)
-    #blank_plate = cv2.blur(blank_plate,(kernsize,kernsize))
-    kernel = np.ones((kernsize,kernsize),np.float32)/(kernsize**2)
-    blank_plate = cv2.filter2D(blank_plate,-1,kernel)
-
-    # Write license plate to file
-    cv2.imwrite(os.path.join(path + "pictures/", 
-                                "plate_{}{}.png".format(plate_alpha, plate_num)),
-                blank_plate)
+            # Write license plate to file
+            cv2.imwrite(os.path.join(path + "pictures/numbers/", 
+                                        "plate_{}_{}{}.png".format(str(n), plate_alpha, plate_num)),
+                        blank_plate)
 #'''
